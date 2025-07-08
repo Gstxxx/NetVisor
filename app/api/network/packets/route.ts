@@ -2,26 +2,51 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    // In a real implementation, this would capture actual network packets
-    // For now, we'll generate mock packet data
-    
-    const protocols = ['HTTP', 'HTTPS', 'DNS', 'TCP', 'UDP', 'ICMP'];
-    const sources = ['192.168.1.100', '192.168.1.150', '8.8.8.8'];
-    const destinations = ['192.168.1.1', '216.58.194.174', '142.250.185.46'];
-    
-    const generatePacket = () => {
-      return {
-        id: Math.random().toString(36).substr(2, 9),
-        timestamp: new Date().toISOString(),
-        source: sources[Math.floor(Math.random() * sources.length)],
-        destination: destinations[Math.floor(Math.random() * destinations.length)],
-        protocol: protocols[Math.floor(Math.random() * protocols.length)],
-        size: Math.floor(Math.random() * 1500) + 64,
-        info: 'Sample packet information'
-      };
+    // Lê conexões reais de /proc/net/tcp e /proc/net/udp
+    const fs = await import('fs/promises');
+    type Proto = 'TCP' | 'UDP';
+    interface Packet {
+      id: string;
+      timestamp: string;
+      source: string;
+      destination: string;
+      protocol: Proto;
+      size: number | null;
+      info: string;
+    }
+    const parseConnections = (content: string, proto: Proto): Packet[] => {
+      const lines = content.trim().split('\n').slice(1); // ignora cabeçalho
+      return lines.map((line, idx) => {
+        const parts = line.trim().split(/\s+/);
+        const local = parts[1];
+        const remote = parts[2];
+        const hexToIpPort = (hex: string) => {
+          const [ipHex, portHex] = hex.split(':');
+          const ip = ipHex.match(/../g)?.reverse().map(h => parseInt(h, 16)).join('.') ?? '';
+          const port = parseInt(portHex, 16);
+          return { ip, port };
+        };
+        const localAddr = hexToIpPort(local);
+        const remoteAddr = hexToIpPort(remote);
+        return {
+          id: proto + '-' + idx,
+          timestamp: new Date().toISOString(),
+          source: localAddr.ip + ':' + localAddr.port,
+          destination: remoteAddr.ip + ':' + remoteAddr.port,
+          protocol: proto,
+          size: null,
+          info: ''
+        };
+      });
     };
 
-    const packets = Array.from({ length: 10 }, generatePacket);
+    const [tcpContent, udpContent]: [string, string] = await Promise.all([
+      fs.readFile('/proc/net/tcp', 'utf-8'),
+      fs.readFile('/proc/net/udp', 'utf-8')
+    ]);
+    const tcpPackets = parseConnections(tcpContent, 'TCP');
+    const udpPackets = parseConnections(udpContent, 'UDP');
+    const packets: Packet[] = [...tcpPackets, ...udpPackets].slice(0, 20); // limita a 20
 
     return NextResponse.json({
       success: true,
@@ -29,7 +54,7 @@ export async function GET() {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Failed to capture packets' },
+      { error: 'Failed to capture packets', details: String(error) },
       { status: 500 }
     );
   }

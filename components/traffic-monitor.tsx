@@ -1,25 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card, CardContent, CardDescription, CardHeader, CardTitle
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell
 } from 'recharts';
-import { Download, Upload, Activity, TrendingUp, Pause, Play } from 'lucide-react';
+import {
+  Download, Upload, Activity, TrendingUp, Pause, Play
+} from 'lucide-react';
 
 interface TrafficData {
   timestamp: string;
@@ -47,91 +41,47 @@ export function TrafficMonitor({ onTrafficChange }: TrafficMonitorProps) {
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [currentSpeed, setCurrentSpeed] = useState({ download: 0, upload: 0 });
 
-  // Mock data generation
   useEffect(() => {
-    const generateMockData = () => {
-      const now = new Date();
-      const mockData: TrafficData[] = [];
-      
-      for (let i = 29; i >= 0; i--) {
-        const timestamp = new Date(now.getTime() - i * 1000);
-        const download = Math.random() * 100 + 20;
-        const upload = Math.random() * 50 + 10;
-        mockData.push({
-          timestamp: timestamp.toLocaleTimeString(),
-          download,
-          upload,
-          total: download + upload
-        });
-      }
-      
-      setTrafficData(mockData);
-      
-      // Generate device traffic data
-      const mockDeviceData: DeviceTraffic[] = [
-        {
-          ip: '192.168.1.100',
-          hostname: 'Johns-MacBook',
-          download: 45.2,
-          upload: 12.8,
-          total: 58.0,
-          percentage: 35
-        },
-        {
-          ip: '192.168.1.150',
-          hostname: 'iPhone-12',
-          download: 23.4,
-          upload: 5.6,
-          total: 29.0,
-          percentage: 18
-        },
-        {
-          ip: '192.168.1.200',
-          hostname: 'NAS-Server',
-          download: 67.8,
-          upload: 34.2,
-          total: 102.0,
-          percentage: 47
+    let interval: NodeJS.Timeout;
+
+    const fetchTraffic = async () => {
+      try {
+        const res = await fetch('/api/network/traffic');
+        const data = await res.json();
+        if (data?.traffic) {
+          const { download, upload, timestamp } = data.traffic;
+          const entry = {
+            timestamp: new Date(timestamp).toLocaleTimeString(),
+            download,
+            upload,
+            total: download + upload,
+          };
+          setTrafficData(prev => [...prev.slice(-29), entry]);
+          setCurrentSpeed({ download, upload });
+          onTrafficChange({ download, upload });
         }
-      ];
-      
-      setDeviceTraffic(mockDeviceData);
-      
-      // Update current speeds
-      const latestData = mockData[mockData.length - 1];
-      setCurrentSpeed({
-        download: latestData.download,
-        upload: latestData.upload
-      });
-      
-      onTrafficChange({
-        download: latestData.download,
-        upload: latestData.upload
-      });
+      } catch {
+        setCurrentSpeed({ download: 0, upload: 0 });
+      }
     };
 
-    generateMockData();
-    
-    const interval = setInterval(() => {
-      if (isMonitoring) {
-        generateMockData();
-      }
+    fetchTraffic();
+    interval = setInterval(() => {
+      if (isMonitoring) fetchTraffic();
     }, 1000);
 
     return () => clearInterval(interval);
   }, [isMonitoring, onTrafficChange]);
 
   const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
+    if (!bytes) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   };
 
-  const formatSpeed = (speed: number) => {
-    return formatBytes(speed * 1024) + '/s';
-  };
+  const formatSpeed = (speed: number) => `${formatBytes(speed * 1024)}/s`;
 
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
 
@@ -139,11 +89,11 @@ export function TrafficMonitor({ onTrafficChange }: TrafficMonitorProps) {
     <div className="space-y-6">
       {/* Real-time Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Download */}
         <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-slate-300 flex items-center">
-              <Download className="h-4 w-4 mr-2 text-blue-400" />
-              Download Speed
+              <Download className="h-4 w-4 mr-2 text-blue-400" /> Download Speed
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -157,11 +107,11 @@ export function TrafficMonitor({ onTrafficChange }: TrafficMonitorProps) {
           </CardContent>
         </Card>
 
+        {/* Upload */}
         <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-slate-300 flex items-center">
-              <Upload className="h-4 w-4 mr-2 text-green-400" />
-              Upload Speed
+              <Upload className="h-4 w-4 mr-2 text-green-400" /> Upload Speed
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -175,17 +125,20 @@ export function TrafficMonitor({ onTrafficChange }: TrafficMonitorProps) {
           </CardContent>
         </Card>
 
+        {/* Monitoring Toggle */}
         <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-slate-300 flex items-center">
-              <Activity className="h-4 w-4 mr-2 text-purple-400" />
-              Monitoring
+              <Activity className="h-4 w-4 mr-2 text-purple-400" /> Monitoring
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <Badge 
-                className={`${isMonitoring ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}
+              <Badge
+                className={`${isMonitoring
+                  ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                  : 'bg-red-500/20 text-red-400 border-red-500/30'
+                  }`}
               >
                 {isMonitoring ? 'Active' : 'Paused'}
               </Badge>
@@ -214,50 +167,28 @@ export function TrafficMonitor({ onTrafficChange }: TrafficMonitorProps) {
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={trafficData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis 
-                dataKey="timestamp" 
-                stroke="#9CA3AF"
-                fontSize={12}
-              />
-              <YAxis 
-                stroke="#9CA3AF"
-                fontSize={12}
-                tickFormatter={(value) => formatSpeed(value)}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1F2937', 
+              <XAxis dataKey="timestamp" stroke="#9CA3AF" fontSize={12} />
+              <YAxis stroke="#9CA3AF" fontSize={12} tickFormatter={formatSpeed} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1F2937',
                   border: '1px solid #374151',
-                  borderRadius: '8px'
+                  borderRadius: '8px',
                 }}
                 labelStyle={{ color: '#F3F4F6' }}
                 formatter={(value: number, name: string) => [
                   formatSpeed(value),
-                  name === 'download' ? 'Download' : 'Upload'
+                  name.charAt(0).toUpperCase() + name.slice(1),
                 ]}
               />
-              <Line 
-                type="monotone" 
-                dataKey="download" 
-                stroke="#3B82F6" 
-                strokeWidth={2}
-                dot={false}
-                name="download"
-              />
-              <Line 
-                type="monotone" 
-                dataKey="upload" 
-                stroke="#10B981" 
-                strokeWidth={2}
-                dot={false}
-                name="upload"
-              />
+              <Line type="monotone" dataKey="download" stroke="#3B82F6" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="upload" stroke="#10B981" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {/* Device Traffic Analysis */}
+      {/* Traffic Distribution (Mocked) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
           <CardHeader>
@@ -268,7 +199,7 @@ export function TrafficMonitor({ onTrafficChange }: TrafficMonitorProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {deviceTraffic.map((device, index) => (
+              {deviceTraffic.map((device) => (
                 <div key={device.ip} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
@@ -284,13 +215,7 @@ export function TrafficMonitor({ onTrafficChange }: TrafficMonitorProps) {
                       </div>
                     </div>
                   </div>
-                  <Progress 
-                    value={device.percentage} 
-                    className="h-2"
-                    style={{
-                      backgroundColor: '#374151'
-                    }}
-                  />
+                  <Progress value={device.percentage} className="h-2" style={{ backgroundColor: '#374151' }} />
                 </div>
               ))}
             </div>
@@ -300,9 +225,7 @@ export function TrafficMonitor({ onTrafficChange }: TrafficMonitorProps) {
         <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-white">Traffic Distribution</CardTitle>
-            <CardDescription className="text-slate-400">
-              Bandwidth usage breakdown
-            </CardDescription>
+            <CardDescription className="text-slate-400">Bandwidth usage breakdown</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -321,11 +244,11 @@ export function TrafficMonitor({ onTrafficChange }: TrafficMonitorProps) {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1F2937', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1F2937',
                     border: '1px solid #374151',
-                    borderRadius: '8px'
+                    borderRadius: '8px',
                   }}
                   formatter={(value: number) => [formatSpeed(value), 'Traffic']}
                 />

@@ -1,48 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+
 import { NetworkDevices } from '@/components/network-devices';
 import { TrafficMonitor } from '@/components/traffic-monitor';
 import { PacketAnalyzer } from '@/components/packet-analyzer';
-import { AlertsPanel } from '@/components/alerts-panel';
 import { NetworkStats } from '@/components/network-stats';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Shield, Activity, Network, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Shield, Activity, Network } from 'lucide-react';
+import { useNetworkDashboard } from '@/hooks/use-network-dashboard';
+
 
 export default function NetMonitorDashboard() {
-  const [isScanning, setIsScanning] = useState(false);
-  const [lastScan, setLastScan] = useState<Date | null>(null);
-  const [networkStatus, setNetworkStatus] = useState<'healthy' | 'warning' | 'critical'>('healthy');
-  const [deviceCount, setDeviceCount] = useState(0);
-  const [totalTraffic, setTotalTraffic] = useState({ download: 0, upload: 0 });
-
-  const handleRefresh = async () => {
-    setIsScanning(true);
-    try {
-      // Simulate network scan
-      await fetch('/api/network/scan', { method: 'POST' });
-      setLastScan(new Date());
-    } catch (error) {
-      console.error('Failed to scan network:', error);
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  useEffect(() => {
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(() => {
-      handleRefresh();
-    }, 30000);
-
-    // Initial scan
-    handleRefresh();
-
-    return () => clearInterval(interval);
-  }, []);
+  const {
+    isScanning,
+    lastScan,
+    networkStatus,
+    deviceCount,
+    totalTraffic,
+    refreshAll,
+  } = useNetworkDashboard();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -50,15 +28,6 @@ export default function NetMonitorDashboard() {
       case 'warning': return 'bg-yellow-500';
       case 'critical': return 'bg-red-500';
       default: return 'bg-gray-500';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'healthy': return <Shield className="h-4 w-4" />;
-      case 'warning': return <AlertTriangle className="h-4 w-4" />;
-      case 'critical': return <AlertTriangle className="h-4 w-4" />;
-      default: return <Network className="h-4 w-4" />;
     }
   };
 
@@ -84,7 +53,7 @@ export default function NetMonitorDashboard() {
               {deviceCount} devices
             </Badge>
             <Button 
-              onClick={handleRefresh}
+              onClick={refreshAll}
               disabled={isScanning}
               variant="outline"
               size="sm"
@@ -118,33 +87,26 @@ export default function NetMonitorDashboard() {
               <Shield className="h-4 w-4 mr-2" />
               Packets
             </TabsTrigger>
-            <TabsTrigger value="alerts" className="data-[state=active]:bg-slate-700">
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Alerts
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="devices" className="space-y-6">
-            <NetworkDevices onDeviceCountChange={setDeviceCount} />
+            <NetworkDevices />
           </TabsContent>
 
           <TabsContent value="traffic" className="space-y-6">
-            <TrafficMonitor onTrafficChange={setTotalTraffic} />
+            <TrafficMonitor />
           </TabsContent>
 
           <TabsContent value="packets" className="space-y-6">
             <PacketAnalyzer />
           </TabsContent>
 
-          <TabsContent value="alerts" className="space-y-6">
-            <AlertsPanel onStatusChange={setNetworkStatus} />
-          </TabsContent>
         </Tabs>
 
         {/* Footer */}
         <div className="text-center text-slate-500 text-sm">
           {lastScan && (
-            <p>Last scan: {lastScan.toLocaleTimeString()}</p>
+            <p>Last scan: {lastScan instanceof Date ? lastScan.toLocaleTimeString() : new Date(lastScan).toLocaleTimeString()}</p>
           )}
         </div>
       </div>
